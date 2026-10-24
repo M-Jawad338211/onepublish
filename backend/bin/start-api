@@ -1,4 +1,3 @@
 #!/bin/sh
-# Railway private networking is IPv6, so bind :: (dual-stack) rather than 0.0.0.0.
-exec uvicorn app.api.main:app --host :: --port "${PORT:-8000}" \
-  --proxy-headers --forwarded-allow-ips '*' --no-access-log
+# Binds one dual-stack socket: IPv6 for Railway's private network, IPv4 for health checks.
+exec python -m app.api.serve
