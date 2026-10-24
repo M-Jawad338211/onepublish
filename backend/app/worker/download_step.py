@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 from datetime import timedelta
 
 from sqlalchemy import exists, func, or_, update
@@ -20,17 +21,21 @@ from app.models import (
     Target,
     TargetStatus,
     Video,
+    WorkerStatus,
 )
 from app.services import media, staging
 from app.services.alerts import log_event, raise_alert
-from app.services.downloader import BotCheck, SkipVideo, download_short
+from app.services.downloader import BotCheck, SkipVideo, config_fingerprint, download_short
 from app.worker.context import WorkerContext
 from app.worker.quota import DAILY_UPLOAD_CAP, WINDOW
 
 log = logging.getLogger(__name__)
 
 MAX_ATTEMPTS = 3
-BOT_CHECK_RETRY = timedelta(hours=1)
+# Space requests out; a few Shorts a day never needs back-to-back downloads, and bursts
+# are what get server IPs and accounts flagged.
+MIN_DOWNLOAD_GAP_S = 90
+BOT_CHECK_REASON = "YouTube bot check"
 
 
 def _target_has_room(now):  # noqa: ANN001, ANN202
@@ -114,10 +119,16 @@ async def download_step(ctx: WorkerContext) -> None:
             )
             await session.commit()
             return
+        ws = await session.get(WorkerStatus, 1)
+        if ws and ws.downloads_paused_reason:
+            return
+        if time.monotonic() - ctx.last_download_at < MIN_DOWNLOAD_GAP_S:
+            return
         video = await _claim(session)
         if video is None:
             return
         assert video.id is not None
+        ctx.last_download_at = time.monotonic()
         out_dir = staging.video_dir(staging.ensure(settings.staging_dir), video.yt_video_id)
 
         try:
@@ -134,18 +145,29 @@ async def download_step(ctx: WorkerContext) -> None:
             await session.commit()
             return
         except BotCheck as e:
+            # Stop every download, not just this one: retrying with cookies YouTube has
+            # rejected is what gets the account behind them restricted.
             staging.delete_video_files(settings.staging_dir, video.yt_video_id, None)
             video.download_status = DownloadStatus.NEW
-            video.next_attempt_at = utcnow() + BOT_CHECK_RETRY
+            video.download_attempts = max(0, video.download_attempts - 1)
             video.last_error = str(e)[:1000]
+            ws = await session.get(WorkerStatus, 1) or WorkerStatus(id=1)
+            ws.downloads_paused_reason = BOT_CHECK_REASON
+            ws.downloads_paused_at = utcnow()
+            ws.paused_config_fp = config_fingerprint(settings)
+            session.add(ws)
             await raise_alert(
                 session,
                 AlertKind.BOT_CHECK,
-                "YouTube is asking the server to sign in to confirm it's not a bot. "
-                "Refresh YTDLP_COOKIES_B64 or set YTDLP_PROXY.",
+                "Downloads paused: YouTube asked the server to sign in to confirm it's not a "
+                "bot, so the cookies were rejected. Nothing is retried until you replace "
+                "YTDLP_COOKIES_B64 (or set YTDLP_PROXY), which resumes downloads on restart, "
+                "or press Resume downloads.",
                 dedupe_key="bot-check",
             )
-            log_event(session, "YouTube bot check", video_id=video.id, level="WARNING")
+            log_event(
+                session, "YouTube bot check; downloads paused", video_id=video.id, level="WARNING"
+            )
             session.add(video)
             await session.commit()
             return

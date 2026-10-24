@@ -16,7 +16,7 @@ from app.db import dispose_engine, session_factory, utcnow
 from app.logs import setup_logging
 from app.models import WorkerStatus
 from app.services import staging, youtube
-from app.services.downloader import write_cookies, ytdlp_version
+from app.services.downloader import config_fingerprint, write_cookies, ytdlp_version
 from app.services.tiktok import TikTokClient
 from app.worker.cleanup import cleanup_step, recover_on_start
 from app.worker.context import WorkerContext
@@ -78,7 +78,7 @@ async def main() -> None:
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, ctx.stopping.set)
 
-    await recover_on_start()
+    await recover_on_start(config_fingerprint(settings))
     async with session_factory()() as session:
         ws = await session.get(WorkerStatus, 1) or WorkerStatus(id=1)
         ws.started_at = utcnow()

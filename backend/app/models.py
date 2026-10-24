@@ -291,3 +291,9 @@ class WorkerStatus(SQLModel, table=True):
     )
     youtube_backoff_until: datetime | None = _ts()
     started_at: datetime | None = _ts()
+    # Circuit breaker for YouTube's "confirm you're not a bot": every download stops at the
+    # first one so the account behind the cookies isn't hammered. Cleared by the operator,
+    # or automatically when the worker starts with different cookies/proxy.
+    downloads_paused_reason: str | None = None
+    downloads_paused_at: datetime | None = _ts()
+    paused_config_fp: str | None = None

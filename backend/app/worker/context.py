@@ -37,3 +37,5 @@ class WorkerContext:
     init_limiter: RateLimiter = field(default_factory=lambda: RateLimiter(6, 60))
     # Doubles on each consecutive YouTube 429/403, resets on a clean poll (FR-9).
     youtube_backoff_s: int = 0
+    # monotonic time of the last download attempt; downloads are spaced out (see download_step)
+    last_download_at: float = 0.0

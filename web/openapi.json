@@ -1307,6 +1307,28 @@
     }
    }
   },
+  "/api/status/resume-downloads": {
+   "post": {
+    "tags": [
+     "system"
+    ],
+    "summary": "Resume Downloads",
+    "description": "Lifts the bot-check pause. Use after fixing the cause; a restart with new cookies or\na new proxy lifts it automatically.",
+    "operationId": "resume_downloads_api_status_resume_downloads_post",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/StatusOut"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/health": {
    "get": {
     "tags": [
@@ -2650,6 +2672,29 @@
       ],
       "title": "Youtube Backoff Until"
      },
+     "downloads_paused_reason": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Downloads Paused Reason"
+     },
+     "downloads_paused_at": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Downloads Paused At"
+     },
      "jobs_last_24h": {
       "additionalProperties": {
        "type": "integer"
@@ -2671,6 +2716,8 @@
      "staging_bytes",
      "staging_cap_bytes",
      "youtube_backoff_until",
+     "downloads_paused_reason",
+     "downloads_paused_at",
      "jobs_last_24h",
      "queued_jobs"
     ],

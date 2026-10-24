@@ -230,6 +230,8 @@ class StatusOut(BaseModel):
     staging_bytes: int
     staging_cap_bytes: int
     youtube_backoff_until: datetime | None
+    downloads_paused_reason: str | None
+    downloads_paused_at: datetime | None
     jobs_last_24h: dict[str, int]
     queued_jobs: int
 

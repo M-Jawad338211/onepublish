@@ -350,3 +350,55 @@ async def test_unreadable_token_needs_reconnect(db, world, ctx, staging_dir):
     assert (await reload(Job, job.id)).state == JobState.QUEUED
     alert = (await db.exec(select(Alert))).one()
     assert alert.kind == AlertKind.TARGET_NEEDS_RECONNECT
+
+
+async def test_bot_check_pauses_all_downloads(db, world, ctx, monkeypatch):
+    from app.models import WorkerStatus
+    from app.services.downloader import BotCheck
+    from app.worker import download_step as ds
+    from app.worker.cleanup import recover_on_start
+
+    source, _, _ = world
+    source.created_at = utcnow() - timedelta(hours=1)
+    await record_entries(db, source, [entry("bot00000001"), entry("bot00000002")])
+    await db.commit()
+
+    calls = []
+
+    def blocked(video_id, settings, out_dir):
+        calls.append(video_id)
+        raise BotCheck("Sign in to confirm you're not a bot")
+
+    monkeypatch.setattr(ds, "download_short", blocked)
+    await ds.download_step(ctx)
+    ctx.last_download_at = 0  # skip the spacing so only the pause can stop it
+    await ds.download_step(ctx)
+    assert len(calls) == 1, "second Short must not be tried while paused"
+
+    ws = await reload(WorkerStatus, 1)
+    assert ws.downloads_paused_reason == ds.BOT_CHECK_REASON
+    assert all(v.download_status == DownloadStatus.NEW for v in await db.exec(select(Video)))
+
+    await recover_on_start(ws.paused_config_fp)  # same cookies: stays paused
+    assert (await reload(WorkerStatus, 1)).downloads_paused_reason is not None
+    await recover_on_start("new-cookies")  # cookies changed: resumes
+    assert (await reload(WorkerStatus, 1)).downloads_paused_reason is None
+
+
+async def test_downloads_are_spaced_out(db, world, ctx, monkeypatch):
+    from app.worker import download_step as ds
+
+    source, _, _ = world
+    source.created_at = utcnow() - timedelta(hours=1)
+    await record_entries(db, source, [entry("gap00000001"), entry("gap00000002")])
+    await db.commit()
+    calls = []
+
+    def boom(video_id, settings, out_dir):
+        calls.append(video_id)
+        raise RuntimeError("network")
+
+    monkeypatch.setattr(ds, "download_short", boom)
+    await ds.download_step(ctx)
+    await ds.download_step(ctx)
+    assert len(calls) == 1

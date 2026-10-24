@@ -16,7 +16,7 @@ import { cn } from "cn";
 
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api/client";
-import { useStatus, useUnreadCount } from "@/lib/api/hooks";
+import { useResumeDownloads, useStatus, useUnreadCount } from "@/lib/api/hooks";
 
 const NAV = [
   { href: "/", label: "Overview", icon: Gauge },
@@ -44,6 +44,27 @@ function WorkerDot() {
       />
       Worker {data === undefined ? "…" : alive ? "running" : "down"}
     </span>
+  );
+}
+
+function PausedBanner() {
+  const { data } = useStatus();
+  const resume = useResumeDownloads();
+  if (!data?.downloads_paused_reason) return null;
+  return (
+    <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+      <div>
+        <p className="font-medium">Downloads are paused: {data.downloads_paused_reason}</p>
+        <p className="text-muted-foreground">
+          YouTube rejected the cookies. Nothing is retried until you replace YTDLP_COOKIES_B64 (or
+          set YTDLP_PROXY) on Railway, which resumes automatically, or resume here once it&apos;s
+          fixed.
+        </p>
+      </div>
+      <Button size="sm" variant="outline" disabled={resume.isPending} onClick={() => resume.mutate(undefined)}>
+        Resume downloads
+      </Button>
+    </div>
   );
 }
 
@@ -98,7 +119,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
       <main className="min-w-0 flex-1 px-4 py-6 md:px-8">
-        <div className="mx-auto max-w-6xl">{children}</div>
+        <div className="mx-auto max-w-6xl">
+          <PausedBanner />
+          {children}
+        </div>
         <div className="mt-10 md:hidden">
           <Button variant="ghost" size="sm" onClick={logout}>
             <LogOut /> Sign out

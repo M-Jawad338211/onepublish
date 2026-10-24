@@ -238,3 +238,10 @@ export const useStatus = () =>
     queryFn: () => unwrap(api.GET("/api/status")),
     refetchInterval: POLL_MS,
   });
+
+export const useResumeDownloads = () =>
+  useAction(
+    () => unwrap(api.POST("/api/status/resume-downloads")),
+    [keys.status, ["jobs"]],
+    "Downloads resumed",
+  );

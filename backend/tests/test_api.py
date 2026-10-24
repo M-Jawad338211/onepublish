@@ -241,3 +241,15 @@ async def test_retry_now_clears_backoff(authed, db):
     assert r.status_code == 200 and r.json()["next_attempt_at"] is None
     await db.refresh(v)
     assert v.next_attempt_at is None
+
+
+async def test_resume_downloads(authed, db):
+    from app.models import WorkerStatus
+
+    db.add(WorkerStatus(id=1, downloads_paused_reason="YouTube bot check", paused_config_fp="x"))
+    await db.commit()
+    assert (await authed.get("/api/status")).json()[
+        "downloads_paused_reason"
+    ] == "YouTube bot check"
+    r = await authed.post("/api/status/resume-downloads")
+    assert r.status_code == 200 and r.json()["downloads_paused_reason"] is None

@@ -107,7 +107,7 @@ async def cleanup_step(ctx: WorkerContext) -> None:
         await session.commit()
 
 
-async def recover_on_start() -> None:
+async def recover_on_start(fingerprint: str) -> None:
     """A crash mid-download leaves DOWNLOADING rows; put them back in the queue.
 
     Waiting downloads also retry straight away: a restart usually follows a config
@@ -123,4 +123,11 @@ async def recover_on_start() -> None:
             .where(col(Video.download_status) == DownloadStatus.NEW)
             .values(next_attempt_at=None)
         )
+        ws = await session.get(WorkerStatus, 1)
+        if ws and ws.downloads_paused_reason and ws.paused_config_fp != fingerprint:
+            log.info("cookies/proxy changed; resuming downloads")
+            ws.downloads_paused_reason = None
+            ws.downloads_paused_at = None
+            ws.paused_config_fp = None
+            session.add(ws)
         await session.commit()

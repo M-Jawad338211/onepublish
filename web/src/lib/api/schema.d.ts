@@ -431,6 +431,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/status/resume-downloads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume Downloads
+         * @description Lifts the bot-check pause. Use after fixing the cause; a restart with new cookies or
+         *     a new proxy lifts it automatically.
+         */
+        post: operations["resume_downloads_api_status_resume_downloads_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -886,6 +907,10 @@ export interface components {
             staging_cap_bytes: number;
             /** Youtube Backoff Until */
             youtube_backoff_until: string | null;
+            /** Downloads Paused Reason */
+            downloads_paused_reason: string | null;
+            /** Downloads Paused At */
+            downloads_paused_at: string | null;
             /** Jobs Last 24H */
             jobs_last_24h: {
                 [key: string]: number;
@@ -1863,6 +1888,26 @@ export interface operations {
         };
     };
     get_status_api_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusOut"];
+                };
+            };
+        };
+    };
+    resume_downloads_api_status_resume_downloads_post: {
         parameters: {
             query?: never;
             header?: never;

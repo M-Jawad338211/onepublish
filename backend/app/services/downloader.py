@@ -1,6 +1,7 @@
 """yt-dlp used as a library (SRS §3.3). Runs in a worker thread; never shells out."""
 
 import base64
+import hashlib
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -62,6 +63,9 @@ class DownloadResult:
 
 
 def write_cookies(settings: Settings) -> Path | None:
+    """Writes YTDLP_COOKIES_B64 to disk. Called before every download: yt-dlp saves the
+    jar back when it finishes, and once YouTube rejects the cookies that saved copy has
+    lost its login cookies, so it must never be reused."""
     if not settings.ytdlp_cookies_b64:
         return None
     path = settings.ytdlp_cookies_path
@@ -69,6 +73,12 @@ def write_cookies(settings: Settings) -> Path | None:
     path.write_bytes(base64.b64decode(settings.ytdlp_cookies_b64))
     path.chmod(0o600)
     return path
+
+
+def config_fingerprint(settings: Settings) -> str:
+    """Changes whenever the cookies or proxy change; used to lift a bot-check pause."""
+    raw = f"{settings.ytdlp_cookies_b64}|{settings.ytdlp_proxy}".encode()
+    return hashlib.sha256(raw).hexdigest()[:16]
 
 
 def ydl_options(settings: Settings, out_dir: Path) -> dict[str, Any]:
@@ -115,6 +125,7 @@ def _check_availability(info: dict[str, Any]) -> None:
 def download_short(video_id: str, settings: Settings, out_dir: Path) -> DownloadResult:
     """Blocking. Call through asyncio.to_thread."""
     out_dir.mkdir(parents=True, exist_ok=True)
+    write_cookies(settings)
     url = f"https://www.youtube.com/shorts/{video_id}"
     try:
         with yt_dlp.YoutubeDL(ydl_options(settings, out_dir)) as ydl:

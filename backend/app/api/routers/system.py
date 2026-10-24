@@ -71,9 +71,27 @@ async def get_status(session: SessionDep) -> StatusOut:
         staging_bytes=ws.staging_bytes if ws else 0,
         staging_cap_bytes=await settings_store.staging_cap_bytes(session),
         youtube_backoff_until=ws.youtube_backoff_until if ws else None,
+        downloads_paused_reason=ws.downloads_paused_reason if ws else None,
+        downloads_paused_at=ws.downloads_paused_at if ws else None,
         jobs_last_24h={str(k): int(v) for k, v in counts.items()},
         queued_jobs=int(queued),
     )
+
+
+@router.post(
+    "/status/resume-downloads", response_model=StatusOut, dependencies=[Depends(require_admin)]
+)
+async def resume_downloads(session: SessionDep) -> StatusOut:
+    """Lifts the bot-check pause. Use after fixing the cause; a restart with new cookies or
+    a new proxy lifts it automatically."""
+    ws = await session.get(WorkerStatus, 1)
+    if ws and ws.downloads_paused_reason:
+        ws.downloads_paused_reason = None
+        ws.downloads_paused_at = None
+        ws.paused_config_fp = None
+        session.add(ws)
+        await session.commit()
+    return await get_status(session)
 
 
 @router.get("/health", response_model=Health)
