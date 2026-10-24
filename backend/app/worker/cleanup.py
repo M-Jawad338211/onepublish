@@ -108,11 +108,19 @@ async def cleanup_step(ctx: WorkerContext) -> None:
 
 
 async def recover_on_start() -> None:
-    """A crash mid-download leaves DOWNLOADING rows; put them back in the queue."""
+    """A crash mid-download leaves DOWNLOADING rows; put them back in the queue.
+
+    Waiting downloads also retry straight away: a restart usually follows a config
+    change (fresh cookies, a proxy) that is meant to fix whatever made them wait."""
     async with session_factory()() as session:
         await session.exec(  # type: ignore[call-overload]
             update(Video)
             .where(col(Video.download_status) == DownloadStatus.DOWNLOADING)
             .values(download_status=DownloadStatus.NEW)
+        )
+        await session.exec(  # type: ignore[call-overload]
+            update(Video)
+            .where(col(Video.download_status) == DownloadStatus.NEW)
+            .values(next_attempt_at=None)
         )
         await session.commit()

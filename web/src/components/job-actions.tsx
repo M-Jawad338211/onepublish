@@ -14,7 +14,7 @@ import {
 import type { Job, JobState } from "@/lib/api/client";
 import { useResendJob, useRetryJob, useSkipJob, useTargets } from "@/lib/api/hooks";
 
-const RETRYABLE: JobState[] = ["FAILED", "FAILED_EXPIRED", "SKIPPED"];
+const RETRYABLE: JobState[] = ["QUEUED", "FAILED", "FAILED_EXPIRED", "SKIPPED"];
 const SKIPPABLE: JobState[] = ["QUEUED"];
 
 export function JobActions({ job }: { job: Job }) {
@@ -36,7 +36,7 @@ export function JobActions({ job }: { job: Job }) {
           disabled={!RETRYABLE.includes(job.state)}
           onClick={() => retry.mutate(job.id)}
         >
-          Retry
+          {job.state === "QUEUED" ? "Retry now" : "Retry"}
         </DropdownMenuItem>
         <DropdownMenuItem
           disabled={!SKIPPABLE.includes(job.state)}

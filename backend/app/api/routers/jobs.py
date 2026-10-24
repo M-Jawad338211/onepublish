@@ -134,6 +134,15 @@ def _requeue_video(video: Video) -> None:
 @router.post("/{job_id}/retry", response_model=JobOut)
 async def retry_job(job_id: int, session: SessionDep) -> JobOut:
     job, video, target, source = await _load(session, job_id)
+    if job.state == JobState.QUEUED:
+        # Waiting on a backoff (e.g. after a YouTube bot check): try again now.
+        job.next_attempt_at = None
+        if video.download_status == DownloadStatus.NEW:
+            video.next_attempt_at = None
+        log_event(session, "Retry now requested", job_id=job.id)
+        session.add_all([job, video])
+        await session.commit()
+        return _to_out(job, video, target, source)
     if job.state not in RETRYABLE_BY_HAND:
         raise HTTPException(status.HTTP_409_CONFLICT, f"Job is {job.state}; nothing to retry")
     reset_upload(job)

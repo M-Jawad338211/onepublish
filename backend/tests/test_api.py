@@ -223,3 +223,21 @@ async def test_tiktok_connect_and_callback(authed, db):
         "/api/tiktok/callback", params={"code": "c", "state": state}, follow_redirects=False
     )
     assert "error=" in replay.headers["location"]
+
+
+async def test_retry_now_clears_backoff(authed, db):
+    t = await _target(db)
+    v = Video(
+        yt_video_id="wait0000009",
+        download_status=DownloadStatus.NEW,
+        next_attempt_at=utcnow() + timedelta(hours=1),
+    )
+    db.add(v)
+    await db.flush()
+    job = Job(video_id=v.id, target_id=t.id, next_attempt_at=utcnow() + timedelta(hours=1))
+    db.add(job)
+    await db.commit()
+    r = await authed.post(f"/api/jobs/{job.id}/retry")
+    assert r.status_code == 200 and r.json()["next_attempt_at"] is None
+    await db.refresh(v)
+    assert v.next_attempt_at is None
