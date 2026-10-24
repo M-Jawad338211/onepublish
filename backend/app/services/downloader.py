@@ -89,6 +89,8 @@ def ydl_options(settings: Settings, out_dir: Path) -> dict[str, Any]:
         opts["cookiefile"] = str(settings.ytdlp_cookies_path)
     if settings.ytdlp_proxy:
         opts["proxy"] = settings.ytdlp_proxy
+    if settings.ytdlp_verbose:
+        opts |= {"quiet": False, "no_warnings": False, "verbose": True}
     return opts
 
 

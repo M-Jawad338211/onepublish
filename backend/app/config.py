@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     ytdlp_cookies_b64: str = ""
     ytdlp_cookies_path: Path = Path("/data/cookies.txt")
     ytdlp_proxy: str = ""
+    # Full yt-dlp debug output in the worker logs (cookies, PO tokens, JS runtime).
+    ytdlp_verbose: bool = False
 
     worker_heartbeat_s: int = 30
     log_level: str = "INFO"
