@@ -1,5 +1,5 @@
 # Next.js standalone server for the Railway "web" service.
-FROM node:22.23.2-alpine AS base
+FROM node:26.12.0-alpine AS base
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN corepack enable
 WORKDIR /app
