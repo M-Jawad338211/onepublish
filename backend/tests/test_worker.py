@@ -292,16 +292,49 @@ async def test_non_retryable_status_fails_job(db, world, ctx, staging_dir):
     assert j.state == JobState.FAILED and "file_format_check_failed" in j.last_error
 
 
-async def test_sweeper_expires_stale_files(db, world, ctx, staging_dir):
+async def test_sweeper_requeues_stale_files(db, world, ctx, staging_dir):
     video, job = await ready_video(db, staging_dir, world)
     video.downloaded_at = utcnow() - timedelta(hours=25)
     db.add(video)
     await db.commit()
 
     await cleanup_step(ctx)
-    assert (await reload(Job, job.id)).state == JobState.FAILED_EXPIRED
-    assert (await reload(Video, video.id)).download_status == DownloadStatus.DELETED
+    assert (await reload(Job, job.id)).state == JobState.QUEUED
+    v = await reload(Video, video.id)
+    assert v.download_status == DownloadStatus.NEW and v.file_path is None
     assert not (staging_dir / video.yt_video_id).exists()
+
+
+async def test_unmapped_source_records_nothing(db, world):
+    source, _, mapping = world
+    await db.delete(mapping)
+    await db.commit()
+    source.created_at = utcnow() - timedelta(hours=1)
+    assert await record_entries(db, source, [entry("later000001")]) == 0
+    await db.commit()
+    assert list(await db.exec(select(Video))) == []
+
+
+async def test_download_waits_for_a_free_slot(db, world):
+    source, target, _ = world
+    for i in range(5):
+        v = Video(yt_video_id=f"used000000{i}", download_status=DownloadStatus.DELETED)
+        db.add(v)
+        await db.flush()
+        db.add(
+            Job(
+                video_id=v.id,
+                target_id=target.id,
+                state=JobState.SEND_TO_USER_INBOX,
+                uploaded_at=utcnow() - timedelta(hours=1),
+            )
+        )
+    await db.commit()
+    source.created_at = utcnow() - timedelta(hours=1)
+    await record_entries(db, source, [entry("wait0000001")])
+    await db.commit()
+    async with session_factory()() as s:
+        assert await claim_download(s) is None
 
 
 async def test_unreadable_token_needs_reconnect(db, world, ctx, staging_dir):

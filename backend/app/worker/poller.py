@@ -52,6 +52,15 @@ async def record_entries(session: AsyncSession, source: Source, entries: list[Fe
             .where(col(Target.status).in_([TargetStatus.ACTIVE, TargetStatus.PAUSED]))
         )
     )
+    if not mappings:
+        has_any = (
+            await session.exec(select(Mapping.id).where(Mapping.source_id == source.id).limit(1))
+        ).first()
+        if has_any is None:
+            # A source that hasn't been mapped yet records nothing, so the first mapping
+            # still gets every Short since start_from. Disabled mappings do record (as
+            # SKIPPED) so re-enabling one doesn't back-fill (FR-24).
+            return 0
     new = 0
     for entry in entries:
         if entry.published_at < cutoff:

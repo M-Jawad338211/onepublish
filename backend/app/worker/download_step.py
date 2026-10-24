@@ -4,17 +4,28 @@ import asyncio
 import logging
 from datetime import timedelta
 
-from sqlalchemy import exists, or_, update
+from sqlalchemy import exists, func, or_, update
+from sqlalchemy.orm import aliased
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app import settings_store
 from app.db import session_factory, utcnow
-from app.models import FINAL_JOB_STATES, AlertKind, DownloadStatus, Job, JobState, Video
+from app.models import (
+    FINAL_JOB_STATES,
+    AlertKind,
+    DownloadStatus,
+    Job,
+    JobState,
+    Target,
+    TargetStatus,
+    Video,
+)
 from app.services import media, staging
 from app.services.alerts import log_event, raise_alert
 from app.services.downloader import BotCheck, SkipVideo, download_short
 from app.worker.context import WorkerContext
+from app.worker.quota import DAILY_UPLOAD_CAP, WINDOW
 
 log = logging.getLogger(__name__)
 
@@ -22,9 +33,44 @@ MAX_ATTEMPTS = 3
 BOT_CHECK_RETRY = timedelta(hours=1)
 
 
+def _target_has_room(now):  # noqa: ANN001, ANN202
+    """Correlated on Job.target_id: the target can take one more upload today, counting
+    uploads in the last 24 h plus files already staged for it. Downloading only then
+    keeps a backlog from sitting on disk (and hitting the 24 h sweeper) while it waits."""
+    j2, v2 = aliased(Job), aliased(Video)
+    uploaded = (
+        select(func.count())
+        .select_from(j2)
+        .where(j2.target_id == Job.target_id, j2.uploaded_at > now - WINDOW)
+        .scalar_subquery()
+    )
+    staged = (
+        select(func.count())
+        .select_from(j2)
+        .join(v2, v2.id == j2.video_id)
+        .where(
+            j2.target_id == Job.target_id,
+            col(j2.state).in_([JobState.QUEUED, JobState.INIT, JobState.UPLOADING]),
+            col(v2.download_status).in_([DownloadStatus.READY, DownloadStatus.DOWNLOADING]),
+        )
+        .scalar_subquery()
+    )
+    return uploaded + staged < DAILY_UPLOAD_CAP
+
+
 async def _claim(session: AsyncSession) -> Video | None:
     now = utcnow()
-    has_queued_job = exists().where(Job.video_id == Video.id, Job.state == JobState.QUEUED)
+    ready_target = exists().where(
+        Target.id == Job.target_id,
+        Target.status == TargetStatus.ACTIVE,
+        or_(col(Target.paused_until).is_(None), col(Target.paused_until) <= now),
+    )
+    has_queued_job = exists().where(
+        Job.video_id == Video.id,
+        Job.state == JobState.QUEUED,
+        ready_target,
+        _target_has_room(now),
+    )
     video = (
         await session.exec(
             select(Video)

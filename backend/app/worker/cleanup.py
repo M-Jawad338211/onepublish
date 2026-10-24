@@ -3,7 +3,7 @@
 import logging
 from datetime import timedelta
 
-from sqlalchemy import exists, or_, update
+from sqlalchemy import exists, update
 from sqlmodel import col, select
 
 from app import settings_store
@@ -45,16 +45,14 @@ async def cleanup_step(ctx: WorkerContext) -> None:
             session.add(v)
             log_event(session, "Staged file deleted", video_id=v.id)
 
-        # Sweeper (FR-37): nothing stays staged for more than 24 h, whatever its state.
+        # Sweeper (FR-37): no file stays staged for more than 24 h, whatever its state.
+        # Jobs still waiting for it go back to the queue and the Short is downloaded
+        # again when its target has room, so a long pause never loses a Short.
         stale = list(
             await session.exec(
                 select(Video).where(
-                    or_(
-                        (Video.download_status == DownloadStatus.READY)
-                        & (col(Video.downloaded_at) < now - MAX_STAGE_AGE),
-                        (col(Video.download_status).in_([DownloadStatus.NEW]))
-                        & (col(Video.queued_at) < now - MAX_STAGE_AGE),
-                    )
+                    Video.download_status == DownloadStatus.READY,
+                    col(Video.downloaded_at) < now - MAX_STAGE_AGE,
                 )
             )
         )
@@ -64,19 +62,23 @@ async def cleanup_step(ctx: WorkerContext) -> None:
                 update(Job)
                 .where(col(Job.video_id) == v.id, col(Job.state).in_(NEEDS_FILE))
                 .values(
-                    state=JobState.FAILED_EXPIRED,
-                    last_error="not uploaded within 24 h of detection/download",
-                    finished_at=now,
+                    state=JobState.QUEUED,
+                    publish_id=None,
+                    upload_url=None,
+                    upload_url_expires_at=None,
+                    chunks_done=0,
                 )
             )
-            v.download_status = (
-                DownloadStatus.DELETED
-                if v.download_status == DownloadStatus.READY
-                else DownloadStatus.FAILED
-            )
+            still_needed = (
+                await session.exec(
+                    select(Job.id).where(Job.video_id == v.id, col(Job.state).in_(NEEDS_FILE))
+                )
+            ).first()
+            v.download_status = DownloadStatus.NEW if still_needed else DownloadStatus.DELETED
+            v.download_attempts = 0
             v.file_path = None
             session.add(v)
-            log_event(session, "Expired by the 24 h sweeper", video_id=v.id, level="WARNING")
+            log_event(session, "Staged for 24 h; file deleted", video_id=v.id, level="WARNING")
         await session.commit()
 
         live = set(
