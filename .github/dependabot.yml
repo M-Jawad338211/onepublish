@@ -1,0 +1,37 @@
+version: 2
+updates:
+  # yt-dlp breaks whenever YouTube changes; take its releases daily. CI's smoke test must
+  # pass before the auto-merge job merges the PR, and Railway then redeploys from main.
+  - package-ecosystem: uv
+    directory: /backend
+    schedule:
+      interval: daily
+    open-pull-requests-limit: 5
+    groups:
+      yt-dlp:
+        patterns: ["yt-dlp", "bgutil-ytdlp-pot-provider"]
+      python-deps:
+        patterns: ["*"]
+        exclude-patterns: ["yt-dlp", "bgutil-ytdlp-pot-provider"]
+    ignore:
+      # The plugin must stay on the same major as the pot-provider service image.
+      - dependency-name: bgutil-ytdlp-pot-provider
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+    groups:
+      web-deps:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directories: ["/backend", "/web"]
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

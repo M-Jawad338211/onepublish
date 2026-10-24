@@ -1,0 +1,15 @@
+.env
+.env.local
+.DS_Store
+.data/
+backend/.venv/
+**/__pycache__/
+.pytest_cache/
+.ruff_cache/
+web/node_modules/
+web/.next/
+web/next-env.d.ts
+*.tsbuildinfo
+
+# Spec documents stay local
+*.pdf

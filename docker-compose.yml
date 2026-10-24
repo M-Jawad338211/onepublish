@@ -1,0 +1,27 @@
+# Local development only. On Railway, Postgres is the Railway database and
+# pot-provider is its own private service (see README).
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: onepublish
+      POSTGRES_PASSWORD: onepublish
+      POSTGRES_DB: onepublish
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backend/scripts/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U onepublish"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  pot-provider:
+    image: brainicism/bgutil-ytdlp-pot-provider:2.0.2
+    ports:
+      - "4416:4416"
+
+volumes:
+  pgdata:

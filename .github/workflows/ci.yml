@@ -1,0 +1,107 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: onepublish
+          POSTGRES_PASSWORD: onepublish
+          POSTGRES_DB: onepublish_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U onepublish"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://onepublish:onepublish@localhost:5432/onepublish_test
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+      - run: uv sync --frozen
+      - run: uv run ruff check . && uv run ruff format --check app tests scripts
+      - run: uv run alembic upgrade head
+      - name: Models and migrations agree
+        run: uv run alembic check
+      - run: uv run pytest
+      - name: Web client types match the API
+        run: |
+          uv run python scripts/export_openapi.py ../web/openapi.json
+          git diff --exit-code ../web/openapi.json
+
+  # Proves the pinned yt-dlp still reads a real Short. Gates Dependabot auto-merge.
+  ytdlp-smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: uv sync --frozen
+      - name: Optional cookies for GitHub's datacenter IPs
+        env:
+          COOKIES_B64: ${{ secrets.YTDLP_COOKIES_B64 }}
+        run: |
+          if [ -n "$COOKIES_B64" ]; then
+            echo "$COOKIES_B64" | base64 -d > "$RUNNER_TEMP/cookies.txt"
+            echo "YTDLP_COOKIES_FILE=$RUNNER_TEMP/cookies.txt" >> "$GITHUB_ENV"
+          fi
+      - run: uv run pytest -m smoke
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: web/package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: Generated API types are current
+        run: |
+          pnpm exec openapi-typescript openapi.json --default-non-nullable false -o src/lib/api/schema.d.ts
+          git diff --exit-code src/lib/api/schema.d.ts
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm build
+
+  # Merges Dependabot's yt-dlp PRs once everything above is green; Railway deploys main.
+  automerge-ytdlp:
+    needs: [backend, ytdlp-smoke, web]
+    if: github.event_name == 'pull_request' && github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - id: meta
+        uses: dependabot/fetch-metadata@v3
+      - if: contains(steps.meta.outputs.dependency-names, 'yt-dlp')
+        run: gh pr merge --squash --delete-branch "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

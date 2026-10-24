@@ -1,0 +1,52 @@
+[project]
+name = "onepublish-backend"
+version = "0.1.0"
+description = "YouTube Shorts → TikTok inbox-draft reposter: API and worker"
+requires-python = ">=3.12,<3.15"
+dependencies = [
+    "fastapi>=0.162",
+    "uvicorn[standard]>=0.54",
+    "sqlmodel>=0.0.48",
+    "sqlalchemy[asyncio]>=2.1",
+    "asyncpg>=0.32",
+    "alembic>=1.20",
+    "httpx>=0.28",
+    "yt-dlp[default]==2026.10.21",
+    "bgutil-ytdlp-pot-provider==2.0.2",
+    "cryptography>=50",
+    "argon2-cffi>=25.1",
+    "itsdangerous>=2.2",
+    "pydantic-settings>=2.16",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1",
+    "pytest-asyncio>=1.4",
+    "respx>=0.23",
+    "ruff>=0.14",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+testpaths = ["tests"]
+markers = [
+    "db: needs the Postgres from docker-compose",
+    "smoke: hits real YouTube (CI yt-dlp smoke test)",
+]
+addopts = "-m 'not smoke'"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ASYNC"]
+# Local staging-disk I/O is fast and only the worker does it; not worth thread hops.
+ignore = ["B008", "ASYNC230", "ASYNC240"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
