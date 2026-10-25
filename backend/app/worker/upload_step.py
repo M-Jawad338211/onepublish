@@ -140,6 +140,22 @@ async def upload_step(ctx: WorkerContext) -> None:
                 await session.rollback()
 
 
+# A dropped connection or TikTok 5xx mid-upload: the upload URL is still valid, so the
+# next attempt continues from chunks_done instead of starting a new upload. Every new
+# init is another pending share at TikTok, so avoid them when the old one can finish.
+RESUMABLE = {"network_error", "http_5xx"}
+
+
+def _can_resume(job: Job, err: tt.TikTokError) -> bool:
+    return (
+        err.code in RESUMABLE
+        and job.state == JobState.UPLOADING
+        and bool(job.publish_id and job.upload_url)
+        and job.upload_url_expires_at is not None
+        and job.upload_url_expires_at > utcnow() + timedelta(minutes=5)
+    )
+
+
 async def _fail(session: AsyncSession, job: Job, target: Target, err: tt.TikTokError) -> None:
     job.last_error = str(err)[:1000]
     job.tiktok_log_id = err.log_id or job.tiktok_log_id
@@ -163,8 +179,9 @@ async def _fail(session: AsyncSession, job: Job, target: Target, err: tt.TikTokE
         await mark_needs_reconnect(session, target, err.code)
     elif err.retryable and job.attempts + 1 < MAX_ATTEMPTS:
         job.attempts += 1
-        reset_upload(job)
-        job.state = JobState.QUEUED
+        if not _can_resume(job, err):
+            reset_upload(job)
+            job.state = JobState.QUEUED
         job.next_attempt_at = utcnow() + backoff(job.attempts)
     else:
         job.attempts += 1

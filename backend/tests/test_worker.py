@@ -431,3 +431,28 @@ async def test_raised_cap_lets_a_sixth_upload_through(db, world, ctx, staging_di
     await upload_step(ctx)
     assert init.call_count == 1
     assert (await reload(Job, job.id)).state == JobState.PROCESSING
+
+
+@respx.mock
+async def test_network_drop_mid_upload_resumes_without_new_init(db, world, ctx, staging_dir):
+    _, job = await ready_video(db, staging_dir, world)
+    init = respx.post(INIT_URL).respond(
+        json={"data": {"publish_id": "p-net", "upload_url": UPLOAD_URL}, "error": OK}
+    )
+    put = respx.put(UPLOAD_URL).mock(
+        side_effect=[httpx.ConnectError("nodename nor servname provided"), httpx.Response(201)]
+    )
+    respx.post(STATUS_URL).respond(json={"data": {"status": "PROCESSING_UPLOAD"}, "error": OK})
+
+    await upload_step(ctx)
+    j = await reload(Job, job.id)
+    assert j.state == JobState.UPLOADING and j.publish_id == "p-net" and j.next_attempt_at
+
+    async with session_factory()() as s:
+        row = await s.get(Job, job.id)
+        row.next_attempt_at = None  # skip the backoff
+        s.add(row)
+        await s.commit()
+    await upload_step(ctx)
+    assert init.call_count == 1 and put.call_count == 2
+    assert (await reload(Job, job.id)).state == JobState.PROCESSING
