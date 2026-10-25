@@ -2334,6 +2334,10 @@
       "type": "integer",
       "title": "Default Poll Interval S"
      },
+     "daily_upload_cap": {
+      "type": "integer",
+      "title": "Daily Upload Cap"
+     },
      "tiktok_redirect_uri": {
       "type": "string",
       "title": "Tiktok Redirect Uri"
@@ -2359,6 +2363,7 @@
     "required": [
      "staging_cap_gb",
      "default_poll_interval_s",
+     "daily_upload_cap",
      "tiktok_redirect_uri",
      "tiktok_client_configured",
      "cookies_configured",
@@ -2394,6 +2399,19 @@
        }
       ],
       "title": "Default Poll Interval S"
+     },
+     "daily_upload_cap": {
+      "anyOf": [
+       {
+        "type": "integer",
+        "maximum": 100.0,
+        "minimum": 1.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Daily Upload Cap"
      }
     },
     "type": "object",

@@ -14,6 +14,7 @@ from sqlalchemy import case, or_
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app import settings_store
 from app.db import session_factory, utcnow
 from app.models import (
     AlertKind,
@@ -118,7 +119,8 @@ async def upload_step(ctx: WorkerContext) -> None:
             return
         async with session_factory()() as session:
             assert target.id is not None
-            quota = quota_state(await recent_uploads(session, target.id), utcnow())
+            cap = await settings_store.daily_upload_cap(session)
+            quota = quota_state(await recent_uploads(session, target.id), utcnow(), cap)
             job = await _claim(session, target.id)
             if job is None:
                 await session.rollback()
@@ -180,7 +182,12 @@ async def _fail(session: AsyncSession, job: Job, target: Target, err: tt.TikTokE
         f"Upload error: {err}",
         job_id=job.id,
         level="WARNING",
-        payload={"code": err.code, "log_id": err.log_id},
+        payload={
+            "code": err.code,
+            "message": err.message,
+            "http_status": err.status,
+            "log_id": err.log_id,
+        },
     )
     session.add(job)
     await session.commit()

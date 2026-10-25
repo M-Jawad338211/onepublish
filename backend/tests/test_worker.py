@@ -402,3 +402,32 @@ async def test_downloads_are_spaced_out(db, world, ctx, monkeypatch):
     await ds.download_step(ctx)
     await ds.download_step(ctx)
     assert len(calls) == 1
+
+
+@respx.mock
+async def test_raised_cap_lets_a_sixth_upload_through(db, world, ctx, staging_dir):
+    from app import settings_store
+
+    _, target, _ = world
+    _, job = await ready_video(db, staging_dir, world)
+    for i in range(5):
+        v = Video(yt_video_id=f"cap000000{i}", download_status=DownloadStatus.DELETED)
+        db.add(v)
+        await db.flush()
+        db.add(
+            Job(
+                video_id=v.id,
+                target_id=target.id,
+                state=JobState.SEND_TO_USER_INBOX,
+                uploaded_at=utcnow() - timedelta(hours=1),
+            )
+        )
+    await settings_store.save(db, {"daily_upload_cap": 6})
+    await db.commit()
+    init = respx.post(INIT_URL).respond(
+        json={"data": {"publish_id": "p-6", "upload_url": UPLOAD_URL}, "error": OK}
+    )
+    respx.put(UPLOAD_URL).respond(201)
+    await upload_step(ctx)
+    assert init.call_count == 1
+    assert (await reload(Job, job.id)).state == JobState.PROCESSING

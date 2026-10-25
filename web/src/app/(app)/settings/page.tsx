@@ -31,6 +31,7 @@ function DefaultsForm({ initial }: { initial: Settings }) {
   const save = useUpdateSettings();
   const [cap, setCap] = useState(String(initial.staging_cap_gb));
   const [poll, setPoll] = useState(String(initial.default_poll_interval_s / 60));
+  const [uploadCap, setUploadCap] = useState(String(initial.daily_upload_cap));
   return (
     <Card>
       <CardHeader>
@@ -44,6 +45,7 @@ function DefaultsForm({ initial }: { initial: Settings }) {
             save.mutate({
               staging_cap_gb: Number(cap),
               default_poll_interval_s: Math.round(Number(poll) * 60),
+              daily_upload_cap: Number(uploadCap),
             });
           }}
         >
@@ -52,6 +54,12 @@ function DefaultsForm({ initial }: { initial: Settings }) {
             hint="Downloads pause at 80%. Files are deleted once every account has its draft."
           >
             <Input type="number" step="0.5" min="0.5" value={cap} onChange={(e) => setCap(e.target.value)} />
+          </Field>
+          <Field
+            label="Uploads per TikTok account per 24 h"
+            hint="TikTok allows 5 pending drafts per account; going above 5 makes TikTok refuse uploads and pauses the account for 24 h"
+          >
+            <Input type="number" min="1" max="100" value={uploadCap} onChange={(e) => setUploadCap(e.target.value)} />
           </Field>
           <Field label="Poll interval for new sources (minutes)" hint="Minimum 2 minutes">
             <Input type="number" min="2" value={poll} onChange={(e) => setPoll(e.target.value)} />
@@ -75,7 +83,7 @@ export default function SettingsPage() {
     <>
       <PageHeader title="Settings" />
       <div className="grid gap-4 lg:grid-cols-2">
-        <DefaultsForm key={`${data.staging_cap_gb}-${data.default_poll_interval_s}`} initial={data} />
+        <DefaultsForm key={`${data.staging_cap_gb}-${data.default_poll_interval_s}-${data.daily_upload_cap}`} initial={data} />
         <Card>
           <CardHeader>
             <CardTitle>Configuration</CardTitle>

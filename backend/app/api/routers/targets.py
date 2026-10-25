@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import delete
 from sqlmodel import col, select
 
-from app import crypto
+from app import crypto, settings_store
 from app.api.deps import SessionDep, SettingsDep, require_admin
 from app.db import utcnow
 from app.models import Mapping, Target, TargetStatus, Token
@@ -20,7 +20,8 @@ router = APIRouter(prefix="/targets", tags=["targets"], dependencies=[Depends(re
 
 async def _out(session: SessionDep, target: Target) -> TargetOut:
     assert target.id is not None
-    quota = quota_state(await recent_uploads(session, target.id), utcnow())
+    cap = await settings_store.daily_upload_cap(session)
+    quota = quota_state(await recent_uploads(session, target.id), utcnow(), cap)
     token = await session.get(Token, target.id)
     return TargetOut.model_validate(target).model_copy(
         update={

@@ -818,6 +818,8 @@ export interface components {
             staging_cap_gb: number;
             /** Default Poll Interval S */
             default_poll_interval_s: number;
+            /** Daily Upload Cap */
+            daily_upload_cap: number;
             /** Tiktok Redirect Uri */
             tiktok_redirect_uri: string;
             /** Tiktok Client Configured */
@@ -835,6 +837,8 @@ export interface components {
             staging_cap_gb?: number | null;
             /** Default Poll Interval S */
             default_poll_interval_s?: number | null;
+            /** Daily Upload Cap */
+            daily_upload_cap?: number | null;
         };
         /** SourceCreate */
         SourceCreate: {

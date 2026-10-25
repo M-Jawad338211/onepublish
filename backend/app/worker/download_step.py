@@ -27,7 +27,7 @@ from app.services import media, staging
 from app.services.alerts import log_event, raise_alert
 from app.services.downloader import BotCheck, SkipVideo, config_fingerprint, download_short
 from app.worker.context import WorkerContext
-from app.worker.quota import DAILY_UPLOAD_CAP, WINDOW
+from app.worker.quota import WINDOW
 
 log = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ MIN_DOWNLOAD_GAP_S = 90
 BOT_CHECK_REASON = "YouTube bot check"
 
 
-def _target_has_room(now):  # noqa: ANN001, ANN202
+def _target_has_room(now, cap: int):  # noqa: ANN001, ANN202
     """Correlated on Job.target_id: the target can take one more upload today, counting
     uploads in the last 24 h plus files already staged for it. Downloading only then
     keeps a backlog from sitting on disk (and hitting the 24 h sweeper) while it waits."""
@@ -60,11 +60,12 @@ def _target_has_room(now):  # noqa: ANN001, ANN202
         )
         .scalar_subquery()
     )
-    return uploaded + staged < DAILY_UPLOAD_CAP
+    return uploaded + staged < cap
 
 
 async def _claim(session: AsyncSession) -> Video | None:
     now = utcnow()
+    cap = await settings_store.daily_upload_cap(session)
     ready_target = exists().where(
         Target.id == Job.target_id,
         Target.status == TargetStatus.ACTIVE,
@@ -74,7 +75,7 @@ async def _claim(session: AsyncSession) -> Video | None:
         Job.video_id == Video.id,
         Job.state == JobState.QUEUED,
         ready_target,
-        _target_has_room(now),
+        _target_has_room(now, cap),
     )
     video = (
         await session.exec(

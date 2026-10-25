@@ -22,6 +22,7 @@ async def _settings_out(session: SessionDep, settings: SettingsDep) -> SettingsO
     return SettingsOut(
         staging_cap_gb=float(values["staging_cap_gb"]),
         default_poll_interval_s=int(values["default_poll_interval_s"]),
+        daily_upload_cap=int(values["daily_upload_cap"]),
         tiktok_redirect_uri=settings.tiktok_redirect_uri,
         tiktok_client_configured=bool(settings.tiktok_client_key and settings.tiktok_client_secret),
         cookies_configured=bool(settings.ytdlp_cookies_b64),

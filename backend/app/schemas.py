@@ -210,6 +210,7 @@ class UnreadCount(BaseModel):
 class SettingsOut(BaseModel):
     staging_cap_gb: float
     default_poll_interval_s: int
+    daily_upload_cap: int
     tiktok_redirect_uri: str
     tiktok_client_configured: bool
     cookies_configured: bool
@@ -220,6 +221,7 @@ class SettingsOut(BaseModel):
 class SettingsUpdate(BaseModel):
     staging_cap_gb: float | None = Field(default=None, ge=0.5, le=500)
     default_poll_interval_s: int | None = Field(default=None, ge=120, le=86400)
+    daily_upload_cap: int | None = Field(default=None, ge=1, le=100)
 
 
 class StatusOut(BaseModel):

@@ -8,12 +8,18 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.config import get_settings
 from app.models import AppSetting
+from app.worker.quota import DAILY_UPLOAD_CAP
 
-EDITABLE = {"staging_cap_gb", "default_poll_interval_s"}
+EDITABLE = {"staging_cap_gb", "default_poll_interval_s", "daily_upload_cap"}
 
 
 def defaults() -> dict[str, Any]:
-    return {"staging_cap_gb": get_settings().staging_cap_gb, "default_poll_interval_s": 600}
+    return {
+        "staging_cap_gb": get_settings().staging_cap_gb,
+        "default_poll_interval_s": 600,
+        # TikTok allows 5 pending inbox shares per account per 24 h; raise only to test.
+        "daily_upload_cap": DAILY_UPLOAD_CAP,
+    }
 
 
 async def load(session: AsyncSession) -> dict[str, Any]:
@@ -36,3 +42,7 @@ async def save(session: AsyncSession, changes: dict[str, Any]) -> None:
 
 async def staging_cap_bytes(session: AsyncSession) -> int:
     return int(float((await load(session))["staging_cap_gb"]) * 1024**3)
+
+
+async def daily_upload_cap(session: AsyncSession) -> int:
+    return int((await load(session))["daily_upload_cap"])
