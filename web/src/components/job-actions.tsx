@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -47,15 +48,18 @@ export function JobActions({ job }: { job: Job }) {
         {!!others?.length && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuLabel>Send to another account</DropdownMenuLabel>
-            {others.map((t) => (
-              <DropdownMenuItem
-                key={t.id}
-                onClick={() => resend.mutate({ id: job.id, target_id: t.id })}
-              >
-                {t.display_name}
-              </DropdownMenuItem>
-            ))}
+            {/* Base UI throws if a group label sits outside a Menu.Group. */}
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Send to another account</DropdownMenuLabel>
+              {others.map((t) => (
+                <DropdownMenuItem
+                  key={t.id}
+                  onClick={() => resend.mutate({ id: job.id, target_id: t.id })}
+                >
+                  {t.display_name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
           </>
         )}
       </DropdownMenuContent>
