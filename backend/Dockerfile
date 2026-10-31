@@ -1,5 +1,5 @@
 # One image for both the api and worker Railway services (different start commands).
-FROM python:3.12-slim
+FROM python:3.15-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
