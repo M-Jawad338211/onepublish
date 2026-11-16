@@ -11,7 +11,7 @@ dependencies = [
     "asyncpg>=0.32",
     "alembic>=1.20",
     "httpx>=0.28",
-    "yt-dlp[default]==2026.10.21",
+    "yt-dlp[default]==2026.10.26",
     "bgutil-ytdlp-pot-provider==2.0.2",
     "cryptography>=50",
     "argon2-cffi>=25.1",
